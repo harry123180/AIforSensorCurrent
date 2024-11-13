@@ -1,4 +1,4 @@
-#include <testAI_inferencing.h>
+#include <Pico_inferencing.h>
 #include <RPi_Pico_TimerInterrupt.h>
 #include <Adafruit_NeoPixel.h>
 // 針腳定義
@@ -9,9 +9,11 @@
 #define POWER_PIN 11      // 電源控制引腳
 #define PIXEL_PIN 12      // NeoPixel引腳
 #define SAMPLE_COUNT 256  // 採樣數量
-int samples[SAMPLE_COUNT];     // 儲存採樣數據
+float  samples[SAMPLE_COUNT];     // 儲存採樣數據
+int current_predicted_case = -1;  // 用來存儲辨識出來的case編號
 int sampleIndex = 0;           // 採樣索引
 bool isSampling = false; 
+bool done = false;
 // 定時器相關
 RPI_PICO_Timer ITimer(0);
 unsigned long lastTapTime = 0;          // 上次單擊的時間
@@ -28,12 +30,13 @@ int raw_feature_get_data(size_t offset, size_t length, float *out_ptr) {
 }
 // 定時器中斷服務程序
 bool TimerHandler(repeating_timer *rt) {
-  if (isSampling && sampleIndex < SAMPLE_COUNT) {
+  if (isSampling && !done && sampleIndex < SAMPLE_COUNT) {
     samples[sampleIndex] = analogRead(ADC_PIN);  // 讀取ADC值
     sampleIndex++;
   }
   if (sampleIndex >= SAMPLE_COUNT) {
     isSampling = false;
+    done = true;
     ITimer.stopTimer();  // 停止採樣
     samplingEndTime = millis();
     Serial.println("數據採集完畢！");
@@ -71,39 +74,65 @@ void setup()
  * @brief      Arduino main function
  */
 void loop()
-{   isSampling= true;
-    ITimer.restartTimer();  // 啟動定時器開始採樣
-    Serial.println("開始採集數據...");
-
-    ei_printf("Edge Impulse standalone inferencing (Arduino)\n");
-    if(isSampling==false){
-      if (sizeof(samples) / sizeof(float) != EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
-          ei_printf("The size of your 'features' array is not correct. Expected %lu items, but had %lu\n",
-              EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE, sizeof(samples) / sizeof(float));
-          delay(1000);
-          return;
-      }
-
-      ei_impulse_result_t result = { 0 };
-
-      // the features are stored into flash, and we don't want to load everything into RAM
-      signal_t features_signal;
-      features_signal.total_length = sizeof(samples) / sizeof(samples[0]);
-      features_signal.get_data = &raw_feature_get_data;
-
-      // invoke the impulse
-      EI_IMPULSE_ERROR res = run_classifier(&features_signal, &result, true /* debug */);
-      if (res != EI_IMPULSE_OK) {
-          ei_printf("ERR: Failed to run classifier (%d)\n", res);
-          return;
-      }
-
-      // print inference return code
-      ei_printf("run_classifier returned: %d\r\n", res);
-      print_inference_result(result);
-
+{   
+    // 如果尚未開始採集數據，啟動數據採集
+    if (!isSampling && !done) {
+        isSampling = true;
+        sampleIndex = 0;
+        ITimer.restartTimer();  // 啟動定時器開始採樣
+        samplingStartTime = millis();
+        Serial.println("開始採集數據...");
     }
-    delay(10000);
+    //Serial.println(sampleIndex);
+    // 如果數據採集完成且可以進行推論
+    if (!isSampling && sampleIndex >= SAMPLE_COUNT && done) {
+        Serial.println("開始推論...");
+
+        if (sizeof(samples) / sizeof(float) != EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
+            ei_printf("The size of your 'samples' array is not correct. Expected %lu items, but had %lu\n",
+                      EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE, sizeof(samples) / sizeof(float));
+            delay(1000);
+            return;
+        }
+
+        ei_impulse_result_t result = { 0 };
+        signal_t features_signal;
+        features_signal.total_length = SAMPLE_COUNT;
+        features_signal.get_data = &raw_feature_get_data;
+
+        // 進行推論
+        EI_IMPULSE_ERROR res = run_classifier(&features_signal, &result, true /* debug */);
+        if (res != EI_IMPULSE_OK) {
+            ei_printf("ERR: Failed to run classifier (%d)\n", res);
+            return;
+        }
+
+        // 顯示推論結果
+        print_inference_result(result);
+
+        // 推論完成後的處理
+        Serial.println("推論完成！");
+        if (current_predicted_case == 0) {
+            pixels.clear();
+            pixels.setPixelColor(0, pixels.Color(255, 0, 0));  // 紅色
+            pixels.show();
+            // 執行 case0 的動作
+        } else if (current_predicted_case == 1) {
+            pixels.clear();
+            pixels.setPixelColor(0, pixels.Color(0, 255, 0));  // 綠色
+            pixels.show();
+            // 執行 case1 的動作
+        } else if (current_predicted_case == 2) {
+            pixels.clear();
+            pixels.setPixelColor(0, pixels.Color(0, 0, 255));  // 藍色
+            pixels.show();
+            // 執行 case2 的動作
+        }
+        done = false;
+        delay(1000);  // 暫停 10 秒再重新進行數據採集
+        isSampling = false;  // 重置標誌以重新啟動數據採集
+    }
+  
 }
 
 void print_inference_result(ei_impulse_result_t result) {
@@ -113,7 +142,20 @@ void print_inference_result(ei_impulse_result_t result) {
             result.timing.dsp,
             result.timing.classification,
             result.timing.anomaly);
+    // Find the case with the highest prediction score
+    float max_score = 0.0;
+    current_predicted_case = -1;  // 重置變數
 
+    for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
+        float score = result.classification[i].value;
+        ei_printf("  %s: %.5f\r\n", ei_classifier_inferencing_categories[i], score);
+        
+        // 更新當前回合最高分數及對應的 case
+        if (score > max_score) {
+            max_score = score;
+            current_predicted_case = i;
+        }
+    }
     // Print the prediction results (object detection)
 #if EI_CLASSIFIER_OBJECT_DETECTION == 1
     ei_printf("Object detection bounding boxes:\r\n");
