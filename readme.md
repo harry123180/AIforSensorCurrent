@@ -1,5 +1,15 @@
 # AI for sensor picochu電流量測開發板
-## TSIC推出第一份
+## 全開源的TinyAI推論的感測器開發板
+### AI由數據、算法、算力組成，AI for sensor可以便利的蒐集數據、提供算力、自行實現屬於自己的演算法在開發板上即時推論。
+![AI組成](img/AIcomponents.png)
+
+### 該開發板通常適用於AC220V以下電器的電流量測，連接方式如下圖所示，將L與N其中一條串連進開發板的端口
+![連接方式](img//connection.png)
+## 該開發板支援範例程式所需要安裝依賴的函數庫如下
+1. Adafruit NeoPixel
+2. Button2
+3. RPi_Pico_TimerInterrupt
+## 各個範例程式簡要說明 :
 * Lab1：按鈕切換狀態
 * Lab2：按鈕寫入資料至SD卡
 * Lab3：按鈕寫入資料至SD卡並依照狀態命名
