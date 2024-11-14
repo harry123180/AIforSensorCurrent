@@ -4,7 +4,7 @@
 ![AI組成](img/AIcomponents.png)
 
 ### 該開發板通常適用於AC220V以下電器的電流量測，連接方式如下圖所示，將L與N其中一條串連進開發板的端口
-![連接方式](img//connection.png)
+![連接方式](img/connection.png)
 ## 該開發板支援範例程式所需要安裝依賴的函數庫如下
 1. Adafruit NeoPixel
 2. Button2
