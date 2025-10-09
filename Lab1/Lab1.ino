@@ -54,4 +54,6 @@ void loop() {
       break;
     default:
       Serial.println("D");
+      }
+      }
     
