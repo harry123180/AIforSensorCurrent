@@ -1,12 +1,13 @@
 #include <Button2.h>
 #include <Adafruit_NeoPixel.h>
+#include <RPi_Pico_TimerInterrupt.h>
 #include <SPI.h>
 #include <SD.h>
-#include <RPi_Pico_TimerInterrupt.h>
+
 
 // 針腳定義
-#define SD_CS 28          // SD卡的片選引腳
-#define BUTTON_PIN 27     // 按鈕連接的引腳
+#define SD_CS 5//28          // SD卡的片選引腳
+#define BUTTON_PIN 20//27     // 按鈕連接的引腳
 #define ADC_PIN 26        // ADC連接的引腳
 #define NUMPIXELS 1       // 1個NeoPixel
 #define POWER_PIN 11      // 電源控制引腳
@@ -37,12 +38,6 @@ unsigned long samplingEndTime = 0;      // 採樣結束時間
 // 初始化函數
 void setup() {
   Serial.begin(115200);
-
-  // 初始化NeoPixel
-  pixels.begin();
-  pinMode(POWER_PIN, OUTPUT);
-  digitalWrite(POWER_PIN, HIGH);  // 打開電源
-
   // 初始化SD卡
   if (!SD.begin(SD_CS)) {
     Serial.println("SD卡初始化失敗!");
@@ -76,6 +71,13 @@ void setup() {
     Serial.println("定時器設置失敗");
   }
   ITimer.stopTimer(); // 啟動時不立即運行定時器，等待按鈕觸發
+
+  // 初始化NeoPixel
+  pixels.begin();
+  //pinMode(POWER_PIN, OUTPUT);
+  //digitalWrite(POWER_PIN, HIGH);  // 打開電源
+
+  
 }
 
 // 定時器中斷服務程序
@@ -97,6 +99,8 @@ bool TimerHandler(repeating_timer *rt) {
 // 主循環函數
 void loop() {
   button.loop();  // 處理按鈕事件
+  //Serial.println("TEST");
+  delay(100);
   checkPendingSingleTap();  // 檢查單擊事件
 
   // 控制NeoPixel顏色指示不同狀態
